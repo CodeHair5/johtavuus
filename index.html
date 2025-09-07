@@ -1,0 +1,424 @@
+<!DOCTYPE html>
+<html lang="fi">
+<head>
+    <meta charset="UTF-8">
+    <title>Liuoksen sähkönjohtavuus - Tehtävä</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.4/p5.min.js"></script>
+    <style>
+        body {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            font-family: sans-serif;
+            background-color: #eef2f7;
+            margin: 0;
+            padding: 20px;
+            text-align: center;
+        }
+        h1, h2 {
+            color: #333;
+        }
+        p#instructions {
+            max-width: 600px;
+            color: #555;
+            background-color: #fff;
+            padding: 10px;
+            border-radius: 8px;
+            border: 1px solid #ddd;
+        }
+        .control-group, #quiz-container {
+            margin-top: 15px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            justify-content: center;
+            border: 1px solid #ddd;
+            padding: 15px;
+            border-radius: 8px;
+            background-color: #fff;
+        }
+        button {
+            padding: 10px 15px;
+            font-size: 16px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            color: white;
+            font-weight: bold;
+            transition: background-color 0.2s, transform 0.1s;
+        }
+        button:active {
+            transform: scale(0.95);
+        }
+        #add-a-btn { background-color: #c0392b; }
+        #add-b-btn { background-color: #27ae60; }
+        #add-c-btn { background-color: #f1c40f; }
+        #add-d-btn { background-color: #8e44ad; }
+        #add-water-btn { background-color: #3498db; }
+        #reset-btn { background-color: #7f8c8d; }
+        canvas {
+            border: 2px solid #ccc;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+        }
+        .substance-quiz {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            align-items: center;
+        }
+        .substance-quiz span {
+            font-weight: bold;
+            font-size: 18px;
+        }
+        .answer-buttons button {
+            width: 160px;
+            background-color: #bdc3c7;
+            color: #333;
+        }
+        .answer-buttons button.selected {
+            background-color: #2c3e50;
+            color: white;
+            box-shadow: 0 0 5px 2px #3498db;
+        }
+        #check-answers-btn {
+            background-color: #16a085;
+            width: 100%;
+            margin-top: 10px;
+        }
+        #result-message {
+            margin-top: 15px;
+            font-size: 1.1em;
+            font-weight: bold;
+            min-height: 25px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Liuoksen sähkönjohtavuus</h1>
+    <p id="instructions">
+        Kokeile lisätä eri aineita veteen ja tutki, mitkä niistä johtavat sähköä sytyttämällä lampun. Sulje virtapiiri ensin kytkimestä. <br>
+        Kun olet valmis, luokittele alla olevat aineet niiden sähkönjohtavuuden perusteella.
+    </p>
+
+    <div id="canvas-container"></div>
+
+    <div class="control-group">
+        <button id="add-water-btn">Lisää vettä</button>
+        <button id="add-a-btn">Lisää Aine A</button>
+        <button id="add-b-btn">Lisää Aine B</button>
+        <button id="add-c-btn">Lisää Aine C</button>
+        <button id="add-d-btn">Lisää Aine D</button>
+        <button id="reset-btn">Aloita alusta</button>
+    </div>
+
+    <div id="quiz-container">
+        <h2>Tunnista yhdisteet</h2>
+        <div style="width: 100%; display: flex; justify-content: space-around; flex-wrap: wrap; gap: 15px;">
+            <div class="substance-quiz">
+                <span>Aine A</span>
+                <div class="answer-buttons" data-substance="A">
+                    <button data-type="ionic">Ioniyhdiste</button>
+                    <button data-type="molecular">Molekyyliyhdiste</button>
+                </div>
+            </div>
+            <div class="substance-quiz">
+                <span>Aine B</span>
+                <div class="answer-buttons" data-substance="B">
+                    <button data-type="ionic">Ioniyhdiste</button>
+                    <button data-type="molecular">Molekyyliyhdiste</button>
+                </div>
+            </div>
+            <div class="substance-quiz">
+                <span>Aine C</span>
+                <div class="answer-buttons" data-substance="C">
+                    <button data-type="ionic">Ioniyhdiste</button>
+                    <button data-type="molecular">Molekyyliyhdiste</button>
+                </div>
+            </div>
+             <div class="substance-quiz">
+                <span>Aine D</span>
+                <div class="answer-buttons" data-substance="D">
+                    <button data-type="ionic">Ioniyhdiste</button>
+                    <button data-type="molecular">Molekyyliyhdiste</button>
+                </div>
+            </div>
+        </div>
+        <button id="check-answers-btn">Tarkista vastaukset</button>
+        <p id="result-message"></p>
+    </div>
+
+    <script>
+        // --- Globaalit muuttujat ---
+        let particles = [];
+        let isSwitchClosed = false;
+        const initialWaterLevel = 300;
+        let waterLevel;
+        let saltAmount = 0;
+        let wave = { amplitude: 0, frequency: 0.05, phase: 0, decay: 0.98 };
+        const switchHitbox = { x: 140, y: 70, w: 50, h: 30 };
+        const correctAnswers = { A: 'ionic', B: 'molecular', C: 'molecular', D: 'ionic' };
+        let userAnswers = { A: null, B: null, C: null, D: null };
+
+        function setup() {
+            const canvas = createCanvas(500, 400);
+            canvas.parent('canvas-container');
+            
+            waterLevel = height; // Astia on aluksi tyhjä
+
+            // Simulaation napit
+            select('#add-a-btn').mousePressed(() => addSubstance('A'));
+            select('#add-b-btn').mousePressed(() => addSubstance('B'));
+            select('#add-c-btn').mousePressed(() => addSubstance('C'));
+            select('#add-d-btn').mousePressed(() => addSubstance('D'));
+            select('#reset-btn').mousePressed(resetSimulation);
+            select('#add-water-btn').mousePressed(addWater);
+
+            // Tehtävän napit
+            selectAll('.answer-buttons button').forEach(button => {
+                button.mousePressed(() => handleAnswerSelection(button.elt));
+            });
+            select('#check-answers-btn').mousePressed(checkAnswers);
+        }
+        
+        function mousePressed() {
+            if (mouseX > 0 && mouseX < width && mouseY > 0 && mouseY < height) {
+                if (mouseX > switchHitbox.x && mouseX < switchHitbox.x + switchHitbox.w &&
+                    mouseY > switchHitbox.y && mouseY < switchHitbox.y + switchHitbox.h) {
+                    isSwitchClosed = !isSwitchClosed;
+                }
+            }
+        }
+
+        function draw() {
+            background(238, 242, 247);
+            drawBeaker();
+            if (waterLevel < height) { // Piirrä vesi vain jos sitä on
+                updateAndDrawWater();
+            }
+            drawCircuitAndElectrodes();
+            updateAndDrawParticles();
+        }
+
+        function addSubstance(type) {
+            const isConductive = (type === 'A' || type === 'D');
+            
+            let pColor;
+            if (type === 'A') pColor = color(192, 57, 43);
+            else if (type === 'B') pColor = color(39, 174, 96);
+            else if (type === 'C') pColor = color(241, 196, 15);
+            else pColor = color(142, 68, 173);
+
+            for (let i = 0; i < 15; i++) {
+                particles.push({
+                    x: width / 2 + random(-50, 50), y: 100 + random(-20, 20),
+                    vx: random(-0.5, 0.5), vy: random(0, 1),
+                    color: pColor, life: 255, hasHitWater: false,
+                    isConductive: isConductive
+                });
+            }
+        }
+        
+        function addWater() {
+            if (waterLevel >= height) { // Jos astia on tyhjä, täytä se alkutasolle
+                waterLevel = initialWaterLevel;
+            } else { // Muuten lisää vettä vähän
+                waterLevel = max(160, waterLevel - 20);
+            }
+        }
+
+        function resetSimulation() {
+            particles = [];
+            saltAmount = 0;
+            isSwitchClosed = false;
+            wave.amplitude = 0;
+            waterLevel = height; // Tyhjennä astia
+            userAnswers = { A: null, B: null, C: null, D: null };
+            selectAll('.answer-buttons button').forEach(b => b.removeClass('selected'));
+            select('#result-message').html('');
+        }
+
+        function updateAndDrawWater() {
+            push();
+            wave.amplitude *= wave.decay;
+            wave.phase += 0.1;
+            fill(137, 207, 240, 180);
+            noStroke();
+            beginShape();
+            vertex(100, height);
+            for (let x = 100; x <= 400; x++) {
+                const yOffset = sin(x * wave.frequency + wave.phase) * wave.amplitude;
+                vertex(x, waterLevel + yOffset);
+            }
+            vertex(400, height);
+            endShape(CLOSE);
+            pop();
+        }
+
+        function updateAndDrawParticles() {
+            push();
+            for (let i = particles.length - 1; i >= 0; i--) {
+                let p = particles[i];
+
+                // PÄIVITETTY LOGIIKKA: jaetaan toiminta sen mukaan, onko vettä vai ei
+                if (waterLevel < height) {
+                    // --- LOGIIKKA, KUN VETTÄ ON ---
+                    p.x += p.vx;
+                    p.y += p.vy;
+                    p.vy += 0.02; // Gravitaatio
+
+                    // Tarkistetaan osuma veteen
+                    if (!p.hasHitWater && p.y >= waterLevel) {
+                        p.hasHitWater = true;
+                        wave.amplitude = min(8, wave.amplitude + 1);
+
+                        if (p.isConductive) {
+                            saltAmount += 1;
+                        }
+                    }
+                    
+                    // Veden vastus ja haaleneminen vedessä
+                    if (p.hasHitWater) {
+                        p.vx *= 0.98; // Hidastetaan vedessä
+                        p.vy *= 0.95;
+                        p.life -= 1.5; // TÄRKEÄ MUUTOS: Haaleneminen alkaa vasta, kun hiukkanen on osunut veteen.
+                    }
+
+                } else {
+                    // --- UUSI LOGIIKKA: KÄSITELLÄÄN TILANNE, KUN VETTÄ EI OLE ASTIASSA ---
+                    
+                    // Estetään hiukkasia menemästä pohjan läpi ja pysäytetään ne, kun vauhti on hidastunut
+                    if (p.y >= height - 4 && p.vy > 0) { // Osuma pohjaan
+                         p.y = height - 4; // Asetetaan tarkasti pohjalle
+                         p.vy *= -0.4; // Pomppu pohjasta (epäkimmoinen törmäys)
+                         p.vx *= 0.9; // Kitka hidastaa sivuttaisliikettä
+                         
+                         // Kun vauhti on tarpeeksi pieni, pysäytetään hiukkanen kokonaan.
+                         if (abs(p.vy) < 0.1) {
+                             p.vy = 0;
+                         }
+                    } else {
+                         // Normaali liike, jos ei ole pohjalla
+                        p.vy += 0.05; // Hiukan voimakkaampi gravitaatio ilman vettä
+                    }
+                    p.x += p.vx;
+                    p.y += p.vy;
+                }
+
+                // Astian reunat
+                if (p.x < 104 || p.x > 396) {
+                    p.vx *= -0.9;
+                    p.x = constrain(p.x, 104, 396);
+                }
+
+                // Poistetaan hiukkanen, jos sen elämä on lopussa
+                if (p.life <= 0) {
+                    particles.splice(i, 1);
+                } else {
+                    noStroke();
+                    let current_color = p.color;
+                    // Vain vedessä olevat hiukkaset haalenevat, muut ovat täysin näkyviä
+                    let alpha = p.hasHitWater ? p.life : 255;
+                    current_color.setAlpha(alpha);
+                    fill(current_color);
+                    ellipse(p.x, p.y, 8, 8);
+                }
+            }
+            pop();
+        }
+        
+        function drawBeaker() {
+            push();
+            stroke(150);
+            strokeWeight(3);
+            noFill();
+            line(100, height, 100, 150);
+            line(400, 150, 400, height);
+            line(100, height, 400, height);
+            pop();
+        }
+
+        function drawCircuitAndElectrodes() {
+            push();
+            const lampPos = { x: 350, y: 85 }, batteryPos = { x: 70, y: 85 }, switchPos = { x: 165, y: 85 };
+            const electrode1_X = 220, electrode2_X = 280;
+            stroke(80); strokeWeight(2);
+            line(batteryPos.x + 20, batteryPos.y, switchPos.x - 20, switchPos.y);
+            line(switchPos.x + 20, switchPos.y, electrode1_X, switchPos.y);
+            line(electrode1_X, switchPos.y, electrode1_X, 120);
+            line(electrode2_X, 120, electrode2_X, lampPos.y);
+            line(electrode2_X, lampPos.y, lampPos.x - 15, lampPos.y);
+            line(lampPos.x + 15, lampPos.y, 450, lampPos.y);
+            line(450, lampPos.y, 450, 40); line(450, 40, 30, 40);
+            line(30, 40, 30, batteryPos.y); line(30, batteryPos.y, batteryPos.x - 20, batteryPos.y);
+            fill(100); noStroke();
+            const electrodeTopY = 120, electrodeHeight = height - electrodeTopY;
+            rect(electrode1_X - 3, electrodeTopY, 6, electrodeHeight);
+            rect(electrode2_X - 3, electrodeTopY, 6, electrodeHeight);
+            stroke(80); strokeWeight(2); fill(240);
+            rect(batteryPos.x - 20, batteryPos.y - 15, 40, 30);
+            fill(80); noStroke();
+            rect(batteryPos.x - 25, batteryPos.y - 5, 5, 10);
+            rect(batteryPos.x + 20, batteryPos.y - 8, 5, 16);
+            stroke(80); strokeWeight(2); fill(220);
+            ellipse(switchPos.x - 15, switchPos.y, 8, 8);
+            ellipse(switchPos.x + 15, switchPos.y, 8, 8);
+            push();
+            translate(switchPos.x - 15, switchPos.y);
+            if (!isSwitchClosed) rotate(-QUARTER_PI / 1.5);
+            strokeWeight(4); line(0, 0, 30, 0);
+            pop();
+            fill(200); stroke(100); strokeWeight(2);
+            ellipse(lampPos.x, lampPos.y, 30, 30);
+            if (isSwitchClosed) {
+                const waterAmount = height - waterLevel;
+                const conductivity = waterAmount > 20 ? saltAmount / waterAmount : 0;
+                const conductivityThreshold = 0.3;
+                if (conductivity > conductivityThreshold) {
+                    let brightness = map(conductivity, conductivityThreshold, 2.5, 50, 255);
+                    brightness = constrain(brightness, 0, 255);
+                    noStroke();
+                    fill(255, 255, 0, brightness * 0.7);
+                    ellipse(lampPos.x, lampPos.y, 60, 60);
+                    fill(255, 255, 0, brightness);
+                    ellipse(lampPos.x, lampPos.y, 40, 40);
+                }
+            }
+            pop();
+        }
+        
+        function handleAnswerSelection(buttonElement) {
+            const substance = buttonElement.parentElement.dataset.substance;
+            const type = buttonElement.dataset.type;
+            userAnswers[substance] = type;
+            buttonElement.parentElement.querySelectorAll('button').forEach(b => b.classList.remove('selected'));
+            buttonElement.classList.add('selected');
+        }
+
+        function checkAnswers() {
+            let correctCount = 0;
+            const totalQuestions = Object.keys(correctAnswers).length;
+            let allAnswered = true;
+            for (const substance in userAnswers) {
+                if (userAnswers[substance] === null) {
+                    allAnswered = false; break;
+                }
+                if (userAnswers[substance] === correctAnswers[substance]) {
+                    correctCount++;
+                }
+            }
+            const resultMsg = select('#result-message');
+            if (!allAnswered) {
+                resultMsg.html('Vastaa ensin kaikkiin kohtiin!');
+                resultMsg.style('color', '#e67e22');
+            } else if (correctCount === totalQuestions) {
+                resultMsg.html('Oikein! Kaikki vastaukset olivat oikein.');
+                resultMsg.style('color', '#27ae60');
+            } else {
+                resultMsg.html(`Sait ${correctCount}/${totalQuestions} oikein. Yritä uudelleen!`);
+                resultMsg.style('color', '#c0392b');
+            }
+        }
+    </script>
+</body>
+</html>
